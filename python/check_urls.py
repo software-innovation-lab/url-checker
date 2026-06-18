@@ -288,6 +288,9 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
                 # Use previous last valid date if available
                 prev_data = previous_data.get(name, {})
                 last_valid_date = prev_data.get('last_valid_date', 'Never')
+                # Strip time portion if present (for backward compatibility)
+                if last_valid_date != 'Never' and ' ' in last_valid_date:
+                    last_valid_date = last_valid_date.split(' ')[0]
             
             # Print progress with emoji
             if status_level == 'success':
