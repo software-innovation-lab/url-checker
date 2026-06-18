@@ -209,7 +209,10 @@ Automated URL validation for framework sources using headless browser.
         else:
             status_emoji = '❌'
         
-        readme_content += f"| {status_emoji} | {name} | {code} | {message} | {url} | {last_valid} |\n"
+        # Create clickable link with hover tooltip
+        url_link = f'<a href="{url}" target="_blank" title="{url}">link</a>'
+        
+        readme_content += f"| {status_emoji} | {name} | {code} | {message} | {url_link} | {last_valid} |\n"
     
     readme_content += """
 ---
