@@ -188,8 +188,8 @@ Automated URL validation for framework sources using headless browser.
 
 ## URL Status Report
 
-| Status | Framework Name | Code | Message | URL | Last Valid |
-|--------|----------------|------|---------|-----|------------|
+| Status | Framework Name | Code | URL | Last Valid |
+|--------|----------------|------|-----|------------|
 """
     
     # Add all results in a single table
@@ -209,10 +209,13 @@ Automated URL validation for framework sources using headless browser.
         else:
             status_emoji = '❌'
         
-        # Create clickable link with hover tooltip
+        # Create clickable link with hover tooltip for URL
         url_link = f'<a href="{url}" target="_blank" title="{url}">link</a>'
         
-        readme_content += f"| {status_emoji} | {name} | {code} | {message} | {url_link} | {last_valid} |\n"
+        # Create code with hover tooltip for message
+        code_with_tooltip = f'<span title="{message}">{code}</span>'
+        
+        readme_content += f"| {status_emoji} | {name} | {code_with_tooltip} | {url_link} | {last_valid} |\n"
     
     readme_content += """
 ---
