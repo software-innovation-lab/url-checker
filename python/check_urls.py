@@ -201,13 +201,13 @@ Automated URL validation for framework sources using headless browser.
         url = result['Framework URL']
         last_valid = result['Last Valid Date']
         
-        # Add emoji based on status
+        # Add emoji based on status with hover tooltip
         if status == 'Success':
-            status_emoji = '✅'
+            status_emoji = f'<span title="{message}">✅</span>'
         elif status == 'Warning':
-            status_emoji = '⚠️'
+            status_emoji = f'<span title="{message}">⚠️</span>'
         else:
-            status_emoji = '❌'
+            status_emoji = f'<span title="{message}">❌</span>'
         
         # Create clickable link with hover tooltip for URL
         url_link = f'<a href="{url}" target="_blank" title="{url}">link</a>'
