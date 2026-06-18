@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 URL Checker Script
-Reads URLs from CSV file, validates them, and generates a report table.
+Reads URLs from CSV file, validates them using headless browser, and generates a report table.
 """
 
 import csv
@@ -9,8 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict
-import requests
-from urllib.parse import urlparse
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 # Configuration
 INPUT_CSV = "data/framework-sources.csv"
@@ -19,56 +18,82 @@ REPORT_CSV = f"{OUTPUT_DIR}/url_check_report.csv"
 TIMEOUT = 30  # seconds
 
 
-def check_url(url: str) -> tuple[bool, str]:
+def check_url(url: str, browser_context) -> tuple[str, str, str]:
     """
-    Check if a URL is valid and accessible.
+    Check if a URL is valid and accessible using headless browser.
+    Handles both web pages and file downloads (PDFs, etc.).
     
     Args:
         url: The URL to check
+        browser_context: Playwright browser context
         
     Returns:
-        Tuple of (is_valid, status_message)
+        Tuple of (status_level, status_code, status_message)
+        status_level: 'success', 'warning', or 'fail'
+        status_code: HTTP status code or error type
+        status_message: Detailed message
     """
+    page = None
     try:
-        # Parse URL to ensure it's well-formed
-        parsed = urlparse(url)
-        if not all([parsed.scheme, parsed.netloc]):
-            return False, "Invalid URL format"
+        # Create a new page for this check
+        page = browser_context.new_page()
         
-        # Make HEAD request first (faster)
-        response = requests.head(
-            url,
-            timeout=TIMEOUT,
-            allow_redirects=True,
-            headers={'User-Agent': 'URL-Checker/1.0'}
-        )
+        # Track if a download starts (for PDFs and other files)
+        download_started = False
+        def handle_download(download):
+            nonlocal download_started
+            download_started = True
         
-        # If HEAD fails, try GET
-        if response.status_code >= 400:
-            response = requests.get(
-                url,
-                timeout=TIMEOUT,
-                allow_redirects=True,
-                headers={'User-Agent': 'URL-Checker/1.0'}
-            )
+        page.on("download", handle_download)
         
-        if response.status_code == 200:
-            return True, f"OK (Status: {response.status_code})"
-        elif 200 <= response.status_code < 300:
-            return True, f"OK (Status: {response.status_code})"
+        # Navigate to URL with timeout
+        # Use 'commit' wait state which is faster and works for downloads
+        response = page.goto(url, timeout=TIMEOUT * 1000, wait_until='commit')
+        
+        # Give a moment for download to trigger if it's a file
+        page.wait_for_timeout(1000)
+        
+        # If download started, it's a valid file URL
+        if download_started:
+            if page:
+                page.close()
+            return "success", "200", "File Download"
+        
+        # Otherwise check the response status
+        if response:
+            status = response.status
+            if page:
+                page.close()
+            if 200 <= status < 300:
+                return "success", str(status), "OK"
+            elif status == 403:
+                return "warning", "403", "Access Restricted (URL exists but blocks automation)"
+            else:
+                return "fail", str(status), f"HTTP Error"
         else:
-            return False, f"HTTP {response.status_code}"
+            if page:
+                page.close()
+            return "fail", "N/A", "No response received"
             
-    except requests.exceptions.Timeout:
-        return False, "Timeout"
-    except requests.exceptions.ConnectionError:
-        return False, "Connection Error"
-    except requests.exceptions.TooManyRedirects:
-        return False, "Too Many Redirects"
-    except requests.exceptions.RequestException as e:
-        return False, f"Request Error: {str(e)[:50]}"
+    except PlaywrightTimeout:
+        if page:
+            page.close()
+        return "fail", "TIMEOUT", "Request timeout (30s)"
     except Exception as e:
-        return False, f"Error: {str(e)[:50]}"
+        if page:
+            page.close()
+        error_msg = str(e)
+        # Download starting is actually success for file URLs
+        if "Download is starting" in error_msg:
+            return "success", "200", "File Download"
+        elif "net::ERR_CERT" in error_msg or "SSL" in error_msg or "certificate" in error_msg.lower():
+            return "fail", "SSL_ERROR", "SSL Certificate Error"
+        elif "net::ERR_NAME_NOT_RESOLVED" in error_msg:
+            return "fail", "DNS_ERROR", "DNS Resolution Failed"
+        elif "net::ERR_CONNECTION_REFUSED" in error_msg:
+            return "fail", "REFUSED", "Connection Refused"
+        else:
+            return "fail", "ERROR", f"{error_msg[:40]}"
 
 
 def read_input_csv(filepath: str) -> List[Dict[str, str]]:
@@ -127,77 +152,81 @@ def load_previous_report(filepath: str) -> Dict[str, Dict[str, str]]:
 
 def generate_readme(results: List[Dict[str, str]], check_date: str):
     """
-    Generate README.md with results table.
+    Generate README.md with results table sorted by status.
     
     Args:
         results: List of check results
         check_date: Timestamp of the check
     """
-    # Separate valid and invalid results
-    invalid_results = [r for r in results if r['Validity'] == 'Invalid']
-    valid_results = [r for r in results if r['Validity'] == 'Valid']
+    # Separate by status
+    fail_results = [r for r in results if r['Status'] == 'Fail']
+    warning_results = [r for r in results if r['Status'] == 'Warning']
+    success_results = [r for r in results if r['Status'] == 'Success']
     
-    # Sort by framework name
-    invalid_results.sort(key=lambda x: x['Framework Name'])
-    valid_results.sort(key=lambda x: x['Framework Name'])
+    # Sort each group by framework name
+    fail_results.sort(key=lambda x: x['Framework Name'])
+    warning_results.sort(key=lambda x: x['Framework Name'])
+    success_results.sort(key=lambda x: x['Framework Name'])
+    
+    # Combine in order: Fail, Warning, Success
+    sorted_results = fail_results + warning_results + success_results
     
     readme_content = f"""# URL Checker
 
-Automated URL validation for framework sources.
+Automated URL validation for framework sources using headless browser.
 
 **Last Updated:** {check_date}
 
 ## Summary
 
 - **Total URLs:** {len(results)}
-- **Valid URLs:** ✅ {len(valid_results)}
-- **Invalid URLs:** ❌ {len(invalid_results)}
+- **✅ Success:** {len(success_results)}
+- **⚠️  Warning:** {len(warning_results)} (URL exists but blocks automation)
+- **❌ Fail:** {len(fail_results)}
 
 ---
 
+## URL Status Report
+
+| Status | Framework Name | Code | Message | URL | Last Valid |
+|--------|----------------|------|---------|-----|------------|
 """
     
-    # Add invalid URLs section if any exist
-    if invalid_results:
-        readme_content += """## ❌ Invalid URLs
-
-The following URLs are currently invalid and need attention:
-
-| Framework Name | URL | Status | Last Valid Date |
-|----------------|-----|--------|-----------------|
-"""
-        for result in invalid_results:
-            name = result['Framework Name']
-            url = result['Framework URL']
-            status = result['Status Message']
-            last_valid = result['Last Valid Date']
-            readme_content += f"| {name} | {url} | {status} | {last_valid} |\n"
-        
-        readme_content += "\n---\n\n"
-    
-    # Add valid URLs section
-    readme_content += """## ✅ Valid URLs
-
-The following URLs are currently valid:
-
-| Framework Name | URL | Last Checked |
-|----------------|-----|--------------|
-"""
-    for result in valid_results:
+    # Add all results in a single table
+    for result in sorted_results:
+        status = result['Status']
         name = result['Framework Name']
+        code = result['Status Code']
+        message = result['Status Message']
         url = result['Framework URL']
-        last_checked = result['Last Checked Date']
-        readme_content += f"| {name} | {url} | {last_checked} |\n"
+        last_valid = result['Last Valid Date']
+        
+        # Add emoji based on status
+        if status == 'Success':
+            status_emoji = '✅'
+        elif status == 'Warning':
+            status_emoji = '⚠️'
+        else:
+            status_emoji = '❌'
+        
+        readme_content += f"| {status_emoji} | {name} | {code} | {message} | {url} | {last_valid} |\n"
     
     readme_content += """
 ---
 
+## Status Definitions
+
+- **✅ Success**: URL is accessible and returns valid content
+- **⚠️ Warning**: URL exists but blocks automated access (HTTP 403) - likely valid but protected
+- **❌ Fail**: URL is not accessible (DNS error, timeout, SSL error, etc.)
+
 ## About
 
-This report is automatically generated by the URL Checker CI/CD pipeline.
+This report is automatically generated by the URL Checker CI/CD pipeline using Playwright headless browser.
 - **Schedule:** Daily at 2 AM UTC
 - **Source:** `data/framework-sources.csv`
 - **Full Report:** `output/url_check_report.csv`
+- **Technology:** Playwright Chromium (handles JavaScript, file downloads, and modern web features)
 """
     
     # Write README
@@ -209,7 +238,7 @@ This report is automatically generated by the URL Checker CI/CD pipeline.
 
 def generate_report(frameworks: List[Dict[str, str]], output_path: str):
     """
-    Check all URLs and generate a report CSV.
+    Check all URLs and generate a report CSV using headless browser.
     
     Args:
         frameworks: List of framework data
@@ -226,44 +255,65 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
     
     results = []
     
-    print(f"\nChecking {len(frameworks)} URLs...\n")
+    print(f"\nChecking {len(frameworks)} URLs with headless browser...\n")
     print(f"{'Framework':<50} {'Status':<20} {'Message':<30}")
     print("-" * 100)
     
-    for idx, framework in enumerate(frameworks, 1):
-        name = framework['name']
-        url = framework['url']
+    # Start playwright and browser
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            viewport={'width': 1920, 'height': 1080},
+            ignore_https_errors=False  # Keep SSL validation for security
+        )
         
-        # Check URL validity
-        is_valid, message = check_url(url)
+        for idx, framework in enumerate(frameworks, 1):
+            name = framework['name']
+            url = framework['url']
+            
+            # Check URL validity
+            status_level, status_code, status_message = check_url(url, context)
+            
+            # Determine last valid date
+            if status_level == 'success':
+                last_valid_date = current_date
+            else:
+                # Use previous last valid date if available
+                prev_data = previous_data.get(name, {})
+                last_valid_date = prev_data.get('last_valid_date', 'Never')
+            
+            # Print progress with emoji
+            if status_level == 'success':
+                status_emoji = "✅ SUCCESS"
+            elif status_level == 'warning':
+                status_emoji = "⚠️  WARNING"
+            else:
+                status_emoji = "❌ FAIL"
+            
+            print(f"{name:<50} {status_emoji:<20} {status_code:<12} {status_message:<30}")
+            
+            results.append({
+                'Framework Name': name,
+                'Framework URL': url,
+                'Status': status_level.capitalize(),
+                'Status Code': status_code,
+                'Status Message': status_message,
+                'Last Checked Date': current_date,
+                'Last Valid Date': last_valid_date,
+                'Wave': framework.get('wave', '')
+            })
         
-        # Determine last valid date
-        if is_valid:
-            last_valid_date = current_date
-        else:
-            # Use previous last valid date if available
-            prev_data = previous_data.get(name, {})
-            last_valid_date = prev_data.get('last_valid_date', 'Never')
-        
-        # Print progress
-        status = "✓ VALID" if is_valid else "✗ INVALID"
-        print(f"{name:<50} {status:<20} {message:<30}")
-        
-        results.append({
-            'Framework Name': name,
-            'Framework URL': url,
-            'Validity': 'Valid' if is_valid else 'Invalid',
-            'Status Message': message,
-            'Last Checked Date': current_date,
-            'Last Valid Date': last_valid_date,
-            'Wave': framework.get('wave', '')
-        })
+        # Close browser
+        context.close()
+        browser.close()
     
     # Write results to CSV
     fieldnames = [
         'Framework Name',
         'Framework URL',
-        'Validity',
+        'Status',
+        'Status Code',
         'Status Message',
         'Last Checked Date',
         'Last Valid Date',
@@ -279,18 +329,20 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
     generate_readme(results, current_date)
     
     # Print summary
-    valid_count = sum(1 for r in results if r['Validity'] == 'Valid')
-    invalid_count = len(results) - valid_count
+    success_count = sum(1 for r in results if r['Status'] == 'Success')
+    warning_count = sum(1 for r in results if r['Status'] == 'Warning')
+    fail_count = sum(1 for r in results if r['Status'] == 'Fail')
     
     print("\n" + "=" * 100)
     print(f"\nSummary:")
     print(f"  Total URLs checked: {len(results)}")
-    print(f"  Valid URLs: {valid_count}")
-    print(f"  Invalid URLs: {invalid_count}")
+    print(f"  ✅ Success: {success_count}")
+    print(f"  ⚠️  Warning: {warning_count}")
+    print(f"  ❌ Fail: {fail_count}")
     print(f"\nReport saved to: {output_path}")
     
-    # Return exit code based on results
-    return 0 if invalid_count == 0 else 1
+    # Return exit code based on results (warnings don't fail the build)
+    return 0 if fail_count == 0 else 1
 
 
 def main():
