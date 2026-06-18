@@ -257,7 +257,7 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
     previous_data = load_previous_report(output_path)
     
     # Current timestamp
-    current_date = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    current_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
     results = []
     
