@@ -1,0 +1,153 @@
+name: URL Checker
+
+on:
+  # Run daily at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+  
+  # Run on push to main (for testing)
+  push:
+    branches:
+      - main
+    paths:
+      - 'data/framework-sources.csv'
+      - 'python/check_urls.py'
+      - '.github/workflows/url-checker.yml'
+
+jobs:
+  check-urls:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Needed to commit report back to repo
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run URL checker
+        id: check_urls
+        run: |
+          python python/check_urls.py
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: url-check-report-${{ github.run_number }}
+          path: output/url_check_report.csv
+          retention-days: 90
+      
+      - name: Commit and push report
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add output/url_check_report.csv README.md
+          git diff --staged --quiet || git commit -m "Update URL check report [skip ci]"
+          git push
+      
+      - name: Create issue if URLs are invalid
+        if: steps.check_urls.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const csv = fs.readFileSync('output/url_check_report.csv', 'utf8');
+            const lines = csv.split('\n');
+            const invalidUrls = lines.filter(line => line.includes('Invalid')).length;
+            
+            const issueTitle = `⚠️ URL Check Failed - ${invalidUrls} Invalid URLs Found`;
+            const issueBody = `
+            ## URL Check Report
+            
+            The automated URL checker found **${invalidUrls} invalid URLs** during the latest check.
+            
+            **Run Details:**
+            - Run Number: ${{ github.run_number }}
+            - Run ID: ${{ github.run_id }}
+            - Timestamp: ${new Date().toISOString()}
+            
+            **Action Required:**
+            Please review the [full report artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) and update any broken URLs.
+            
+            ### Quick Links
+            - [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [View Report File](${{ github.server_url }}/${{ github.repository }}/blob/main/output/url_check_report.csv)
+            `;
+            
+            // Check if there's already an open issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['url-check', 'automated']
+            });
+            
+            if (issues.data.length === 0) {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['url-check', 'automated', 'bug']
+              });
+            } else {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `## New Check Results\n\n${issueBody}`
+              });
+            }
+      
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## URL Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f output/url_check_report.csv ]; then
+            total=$(tail -n +2 output/url_check_report.csv | wc -l)
+            valid=$(grep -c ",Valid," output/url_check_report.csv || echo "0")
+            invalid=$(grep -c ",Invalid," output/url_check_report.csv || echo "0")
+            
+            echo "- **Total URLs Checked:** $total" >> $GITHUB_STEP_SUMMARY
+            echo "- **Valid URLs:** ✅ $valid" >> $GITHUB_STEP_SUMMARY
+            echo "- **Invalid URLs:** ❌ $invalid" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ $invalid -gt 0 ]; then
+              echo "### ⚠️ Invalid URLs Found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Framework | URL | Status |" >> $GITHUB_STEP_SUMMARY
+              echo "|-----------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+              grep ",Invalid," output/url_check_report.csv | while IFS=',' read -r name url validity message rest; do
+                echo "| $name | $url | $message |" >> $GITHUB_STEP_SUMMARY
+              done
+            else
+              echo "### ✅ All URLs are valid!" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "⚠️ Report file not found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+# Made with Bob
