@@ -12,6 +12,6 @@ US-CMS-MARS-E 2_0-Vol-I,https://www.yourhealthidaho.org/wp-content/uploads/1-MAR
 US-TX-RAMP-2022-Level-1,https://dir.texas.gov/tx-ramp,Success,200,OK,2026-06-19,2026-06-19,2
 EU-CADA_SWD_2026_502_1_EN_impact_assessment_part2_v6,https://digital-strategy.ec.europa.eu/en/library/proposal-cloud-and-ai-development-act-cada,Success,200,OK,2026-06-19,2026-06-19,3
 Germany-C5-2020,https://www.bsi.bund.de/EN/Topics/CloudComputing/Compliance_Criteria_Catalogue/Compliance_Criteria_Catalogue_node.html,Fail,404,HTTP Error,2026-06-19,Never,1
-Australia-ISM,https://www.cyber.gov.au/business-government/asds-cyber-security-frameworks/ism,Fail,ERROR,Page.goto: net::ERR_HTTP2_PROTOCOL_ERROR,2026-06-19,Never,1
-Hungary-DPA,https://njt.hu/jogszabaly/en/2011-112-00-00,Fail,ERROR,Page.goto: net::ERR_CONNECTION_RESET at ,2026-06-19,Never,1
-Netherlands-UAVG,https://www.autoriteitpersoonsgegevens.nl/en,Fail,TIMEOUT,Request timeout (30s),2026-06-19,Never,1
+Australia-ISM,https://www.cyber.gov.au/business-government/asds-cyber-security-frameworks/ism,Warning,200,OK (wget fallback - blocks browsers),2026-06-19,Never,1
+Hungary-DPA,https://njt.hu/jogszabaly/en/2011-112-00-00,Warning,200,OK (wget fallback - blocks browsers),2026-06-19,Never,1
+Netherlands-UAVG,https://www.autoriteitpersoonsgegevens.nl/en,Fail,ERROR,All fallback methods failed,2026-06-19,Never,1

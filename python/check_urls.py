@@ -6,6 +6,7 @@ Reads URLs from CSV file, validates them using headless browser, and generates a
 
 import csv
 import sys
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict
@@ -16,6 +17,91 @@ INPUT_CSV = "data/framework-sources.csv"
 OUTPUT_DIR = "output"
 REPORT_CSV = f"{OUTPUT_DIR}/url_check_report.csv"
 TIMEOUT = 30  # seconds
+
+
+def check_url_fallback_methods(url: str) -> tuple[str, str, str]:
+    """
+    Fallback method using command-line tools (curl, wget) when Playwright fails.
+    Tries multiple methods to detect if site is accessible via different approaches.
+    
+    Args:
+        url: The URL to check
+        
+    Returns:
+        Tuple of (status_level, status_code, status_message)
+    """
+    # Try different command-line tools with various configurations
+    fallback_commands = [
+        # curl with HTTP/1.1 and realistic headers
+        [
+            'curl', '-I', '--http1.1', '-L', '--max-time', str(TIMEOUT),
+            '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            '-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            url
+        ],
+        # curl with HTTP/2 and realistic headers
+        [
+            'curl', '-I', '--http2', '-L', '--max-time', str(TIMEOUT),
+            '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            url
+        ],
+        # wget spider check
+        [
+            'wget', '--spider', '--timeout=' + str(TIMEOUT), '--tries=1',
+            '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+            url
+        ]
+    ]
+    
+    for cmd in fallback_commands:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT + 5
+            )
+            
+            # Check curl output
+            if cmd[0] == 'curl':
+                output = result.stdout + result.stderr
+                
+                # Look for HTTP status code
+                if 'HTTP/' in output:
+                    lines = output.split('\n')
+                    for line in lines:
+                        if 'HTTP/' in line:
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                status_code = parts[1]
+                                if status_code.isdigit():
+                                    code = int(status_code)
+                                    if 200 <= code < 300:
+                                        return "warning", str(code), "OK (curl fallback - blocks browsers)"
+                                    elif code == 403:
+                                        return "warning", "403", "Accessible but blocks automation"
+                                    elif code == 404:
+                                        return "fail", "404", "Not Found (curl)"
+                                    else:
+                                        return "warning", str(code), f"HTTP {code} (curl)"
+            
+            # Check wget output
+            elif cmd[0] == 'wget':
+                if result.returncode == 0:
+                    return "warning", "200", "OK (wget fallback - blocks browsers)"
+                elif 'HTTP' in result.stderr:
+                    if '404' in result.stderr:
+                        return "fail", "404", "Not Found (wget)"
+                    elif '403' in result.stderr:
+                        return "warning", "403", "Accessible but blocks automation"
+                        
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:
+            continue
+    
+    # All methods failed
+    return "fail", "ERROR", "All fallback methods failed"
 
 
 def check_url(url: str, browser_context) -> tuple[str, str, str]:
@@ -78,7 +164,9 @@ def check_url(url: str, browser_context) -> tuple[str, str, str]:
     except PlaywrightTimeout:
         if page:
             page.close()
-        return "fail", "TIMEOUT", "Request timeout (30s)"
+        # Try fallback methods when Playwright times out
+        print(f"  → Trying fallback methods...")
+        return check_url_fallback_methods(url)
     except Exception as e:
         if page:
             page.close()
@@ -87,13 +175,21 @@ def check_url(url: str, browser_context) -> tuple[str, str, str]:
         if "Download is starting" in error_msg:
             return "success", "200", "File Download"
         elif "net::ERR_CERT" in error_msg or "SSL" in error_msg or "certificate" in error_msg.lower():
-            return "fail", "SSL_ERROR", "SSL Certificate Error"
+            # Try fallback for SSL errors
+            print(f"  → SSL error, trying fallback methods...")
+            return check_url_fallback_methods(url)
         elif "net::ERR_NAME_NOT_RESOLVED" in error_msg:
             return "fail", "DNS_ERROR", "DNS Resolution Failed"
         elif "net::ERR_CONNECTION_REFUSED" in error_msg:
             return "fail", "REFUSED", "Connection Refused"
+        elif "ERR_HTTP2_PROTOCOL_ERROR" in error_msg or "ERR_CONNECTION_RESET" in error_msg:
+            # Try fallback for HTTP2 and connection errors
+            print(f"  → Connection error, trying fallback methods...")
+            return check_url_fallback_methods(url)
         else:
-            return "fail", "ERROR", f"{error_msg[:40]}"
+            # Try fallback for other errors
+            print(f"  → Error occurred, trying fallback methods...")
+            return check_url_fallback_methods(url)
 
 
 def read_input_csv(filepath: str) -> List[Dict[str, str]]:
@@ -265,9 +361,22 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
     print(f"{'Framework':<50} {'Status':<20} {'Message':<30}")
     print("-" * 100)
     
-    # Start playwright and browser
+    # Start playwright and browser with stealth settings
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        # Launch with anti-detection arguments
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials'
+            ]
+        )
+        
         context = browser.new_context(
             user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080},
@@ -286,6 +395,37 @@ def generate_report(frameworks: List[Dict[str, str]], output_path: str):
                 'Cache-Control': 'max-age=0'
             }
         )
+        
+        # Add stealth JavaScript to hide webdriver property
+        context.add_init_script("""
+            // Overwrite the `navigator.webdriver` property
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            
+            // Mock plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            
+            // Mock languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en']
+            });
+            
+            // Add chrome object
+            window.chrome = {
+                runtime: {}
+            };
+            
+            // Mock permissions
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+        """)
         
         for idx, framework in enumerate(frameworks, 1):
             name = framework['name']
