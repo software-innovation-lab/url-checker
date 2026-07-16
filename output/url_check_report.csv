@@ -1,17 +1,17 @@
 Framework Name,Framework URL,Status,Status Code,Status Message,Last Checked Date,Last Valid Date,Wave
-Australia-CPS230,https://www.apra.gov.au/sites/default/files/2023-07/Prudential%20Standard%20CPS%20230%20Operational%20Risk%20Management.pdf,Success,200,File Download,2026-07-15,2026-07-15,1
-Bahamas-DPA,https://laws.bahamas.gov.bs/cms/images/LEGISLATION/BILLS/2025/2025-0076/2025-0076.pdf,Warning,403,Access Restricted (URL exists but blocks automation),2026-07-15,2026-07-10,1
-Ireland-DPA,https://www.irishstatutebook.ie/eli/2018/act/7/enacted/en/html,Success,200,OK,2026-07-15,2026-07-15,1
-nist-800-161-r1-level-1,https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-161r1-upd1.pdf,Success,200,File Download,2026-07-15,2026-07-15,2
-nist-800-82-r3-high,https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-82r3.pdf,Success,200,File Download,2026-07-15,2026-07-15,2
-Singapore-FEAT,https://www.mas.gov.sg/~/media/MAS/News%20and%20Publications/Monographs%20and%20Information%20Papers/FEAT%20Principles%20Final.pdf,Success,200,File Download,2026-07-15,2026-07-15,1
-sparta,https://sparta.aerospace.org/,Success,200,OK,2026-07-15,2026-07-15,3
-Sweden-DPA-2018,https://www.imy.se/en/organisations/data-protection/,Success,200,OK,2026-07-15,2026-07-15,1
-UK-CAF-4_0,https://www.ncsc.gov.uk/sites/default/files/documents/NCSC-Cyber-Assessment-Framework-4.0.pdf,Success,200,File Download,2026-07-15,2026-07-15,1
-US-CMS-MARS-E 2_0-Vol-I,https://www.yourhealthidaho.org/wp-content/uploads/1-MARS-E-v2-0-Harmonized-Security-and-Privacy-Framework-11102015.pdf,Success,200,File Download,2026-07-15,2026-07-15,2
-US-TX-RAMP-2022-Level-1,https://dir.texas.gov/tx-ramp,Success,200,OK,2026-07-15,2026-07-15,2
-EU-CADA_SWD_2026_502_1_EN_impact_assessment_part2_v6,https://digital-strategy.ec.europa.eu/en/library/proposal-cloud-and-ai-development-act-cada,Success,200,OK,2026-07-15,2026-07-15,3
-Germany-C5-2020,https://www.bsi.bund.de/EN/Topics/CloudComputing/Compliance_Criteria_Catalogue/Compliance_Criteria_Catalogue_node.html,Fail,404,HTTP Error,2026-07-15,Never,1
-Australia-ISM,https://www.cyber.gov.au/business-government/asds-cyber-security-frameworks/ism,Warning,200,OK (wget fallback - blocks browsers),2026-07-15,Never,1
-Hungary-DPA,https://njt.hu/jogszabaly/en/2011-112-00-00,Fail,ERROR,All fallback methods failed,2026-07-15,Never,1
-Netherlands-UAVG,https://www.autoriteitpersoonsgegevens.nl/en,Success,200,OK,2026-07-15,2026-07-15,1
+Australia-CPS230,https://www.apra.gov.au/sites/default/files/2023-07/Prudential%20Standard%20CPS%20230%20Operational%20Risk%20Management.pdf,Success,200,File Download,2026-07-16,2026-07-16,1
+Bahamas-DPA,https://laws.bahamas.gov.bs/cms/images/LEGISLATION/BILLS/2025/2025-0076/2025-0076.pdf,Success,202,OK,2026-07-16,2026-07-16,1
+Ireland-DPA,https://www.irishstatutebook.ie/eli/2018/act/7/enacted/en/html,Success,200,OK,2026-07-16,2026-07-16,1
+nist-800-161-r1-level-1,https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-161r1-upd1.pdf,Success,200,File Download,2026-07-16,2026-07-16,2
+nist-800-82-r3-high,https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-82r3.pdf,Success,200,File Download,2026-07-16,2026-07-16,2
+Singapore-FEAT,https://www.mas.gov.sg/~/media/MAS/News%20and%20Publications/Monographs%20and%20Information%20Papers/FEAT%20Principles%20Final.pdf,Success,200,File Download,2026-07-16,2026-07-16,1
+sparta,https://sparta.aerospace.org/,Success,200,OK,2026-07-16,2026-07-16,3
+Sweden-DPA-2018,https://www.imy.se/en/organisations/data-protection/,Success,200,OK,2026-07-16,2026-07-16,1
+UK-CAF-4_0,https://www.ncsc.gov.uk/sites/default/files/documents/NCSC-Cyber-Assessment-Framework-4.0.pdf,Success,200,File Download,2026-07-16,2026-07-16,1
+US-CMS-MARS-E 2_0-Vol-I,https://www.yourhealthidaho.org/wp-content/uploads/1-MARS-E-v2-0-Harmonized-Security-and-Privacy-Framework-11102015.pdf,Success,200,File Download,2026-07-16,2026-07-16,2
+US-TX-RAMP-2022-Level-1,https://dir.texas.gov/tx-ramp,Success,200,OK,2026-07-16,2026-07-16,2
+EU-CADA_SWD_2026_502_1_EN_impact_assessment_part2_v6,https://digital-strategy.ec.europa.eu/en/library/proposal-cloud-and-ai-development-act-cada,Success,200,OK,2026-07-16,2026-07-16,3
+Germany-C5-2020,https://www.bsi.bund.de/EN/Topics/CloudComputing/Compliance_Criteria_Catalogue/Compliance_Criteria_Catalogue_node.html,Fail,404,HTTP Error,2026-07-16,Never,1
+Australia-ISM,https://www.cyber.gov.au/business-government/asds-cyber-security-frameworks/ism,Warning,200,OK (wget fallback - blocks browsers),2026-07-16,Never,1
+Hungary-DPA,https://njt.hu/jogszabaly/en/2011-112-00-00,Fail,ERROR,All fallback methods failed,2026-07-16,Never,1
+Netherlands-UAVG,https://www.autoriteitpersoonsgegevens.nl/en,Success,200,OK,2026-07-16,2026-07-16,1
